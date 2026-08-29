@@ -1,51 +1,112 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-<title>BTC AI Realtime</title>
-<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<meta charset="UTF-8">
+<title>BTC AI ALERT</title>
+<script src="https://s3.tradingview.com/tv.js"></script>
 <style>
-body{background:#0a0a0a;color:#fff;font-family:sans-serif;margin:0;padding:20px}
-#chart{height:400px}
-#ai{background:#1a1a1a;padding:20px;border-radius:10px;margin-top:20px;text-align:center}
-#score{font-size:48px;font-weight:bold}
-.buy{color:#00ff88} .sell{color:#ff3366}
+body{background:#0D1117;color:#c9d1d9;font-family:'Segoe UI';padding:20px}
+#chart{height:500px;border-radius:10px}
+.alert-box{background:#161b22;padding:25px;border-radius:10px;margin-top:15px;border-left:5px solid #d29922}
+#score{font-size:64px;font-weight:900}
+.buy{color:#3fb950;border-color:#3fb950} 
+.sell{color:#f85149;border-color:#f85149}
+#alert{font-size:24px;font-weight:bold;margin:10px 0}
+button{background:#238636;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer}
 </style>
 </head>
 <body>
-<h2>BTCUSDT REALTIME + AI</h2>
+<h1>🚨 BTC AI ANALYSIS + ALERT</h1>
 <div id="chart"></div>
-<div id="ai">
+
+<div id="alertBox" class="alert-box">
   <div>AI SCORE</div>
-  <div id="score">Loading...</div>
-  <div id="signal">Menghubungkan ke Binance...</div>
+  <div id="score" class="buy">0</div>
+  <div id="alert">WAIT</div>
+  <div id="reason">Menghubungkan ke data...</div>
+  <button onclick="testAlert()">Test Suara Alert</button>
 </div>
 
-<script>
-const chart = LightweightCharts.createChart(document.getElementById('chart'), {
-  layout:{bgColor:'#0a0a0a',textColor:'#DDD'},
-  grid:{vertLines:{color:'#222'},horzLines:{color:'#222'}}
-});
-const candle = chart.addCandlestickSeries();
+<audio id="buySound" src="https://www.soundjay.com/buttons/sounds/button-4.mp3"></audio>
+<audio id="sellSound" src="https://www.soundjay.com/buttons/sounds/button-10.mp3"></audio>
 
-let klines = [];
-const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1m');
-ws.onmessage = (e)=>{
-  const k = JSON.parse(e.data).k;
-  const data = {time:k.t/1000,open:+k.o,high:+k.h,low:+k.l,close:+k.c};
-  candle.update(data);
-  klines.push(data);
-  if(klines.length>100) klines.shift();
-  runAI();
+<script>
+// 1. CHART TRADINGVIEW
+new TradingView.widget({
+  "symbol": "BINANCE:BTCUSDT",
+  "container_id": "chart",
+  "theme": "dark",
+  "autosize": true,
+  "interval": "1",
+});
+
+let lastSignal = "WAIT";
+
+// 2. AI LOGIC - AMBIL DATA 15 MENIT SEKALI DARI BINANCE API
+async function getData() {
+  const res = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=100');
+  const data = await res.json();
+  const closes = data.map(d => parseFloat(d[4]));
+  
+  // Hitung RSI 14
+  let gains=0, losses=0;
+  for(let i=1;i<15;i++){
+    let diff = closes[i]-closes[i-1];
+    if(diff>0) gains+=diff; else losses-=diff;
+  }
+  let rs = gains/14 / (losses/14 || 0.01);
+  let rsi = 100 - (100/(1+rs));
+  
+  let score = 0;
+  let reason = "";
+  
+  if(rsi < 30) {score = 75; reason = "RSI Oversold " + rsi.toFixed(1)}
+  else if(rsi > 70) {score = -75; reason = "RSI Overbought " + rsi.toFixed(1)}
+  else {score = Math.floor((50-rsi)*2); reason = "RSI Netral " + rsi.toFixed(1)}
+  
+  updateUI(score, reason);
 }
 
-function runAI(){
-  if(klines.length<20) return;
-  const closes = klines.map(k=>k.close);
-  const rsi = 50 + Math.random()*30 - 15; // simulasi dulu biar cepet muncul
-  const score = rsi > 60 ? 70 : rsi < 40 ? -70 : 0;
+function updateUI(score, reason){
   document.getElementById('score').innerText = score;
-  document.getElementById('score').className = score>0?'buy':'sell';
-  document.getElementById('signal').innerText = score>50?'STRONG BUY':score>0?'BUY':score<-50?'STRONG SELL':'WAIT';
+  document.getElementById('reason').innerText = reason;
+  
+  let signal = "WAIT";
+  let boxClass = "";
+  
+  if(score > 50) {signal = "STRONG BUY"; boxClass = "buy"}
+  else if(score > 20) {signal = "BUY"; boxClass = "buy"}
+  else if(score < -50) {signal = "STRONG SELL"; boxClass = "sell"}
+  else if(score < -20) {signal = "SELL"; boxClass = "sell"}
+  
+  document.getElementById('score').className = boxClass;
+  document.getElementById('alertBox').className = "alert-box " + boxClass;
+  document.getElementById('alert').innerText = signal;
+  
+  // 3. ALERT KALO GANTI SINYAL
+  if(signal!= lastSignal && signal!= "WAIT"){
+    if(signal.includes("BUY")) document.getElementById('buySound').play();
+    if(signal.includes("SELL")) document.getElementById('sellSound').play();
+    
+    // Notifikasi browser
+    if(Notification.permission === "granted"){
+      new Notification("BTC AI ALERT", {body: signal + " - " + reason});
+    }
+    alert("🚨 " + signal + " 🚨\n" + reason);
+    lastSignal = signal;
+  }
+}
+
+// Minta izin notifikasi
+Notification.requestPermission();
+
+// Jalanin tiap 15 detik
+getData();
+setInterval(getData, 15000); 
+
+function testAlert(){
+  document.getElementById('buySound').play();
+  alert("Test Alert Berhasil");
 }
 </script>
 </body>
