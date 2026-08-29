@@ -22,3 +22,98 @@ Bot analisis crypto realtime pake AI Score
 HTML + JavaScript + Lightweight Charts + Binance API
 
 Dibuat oleh: @habilisap-glitch
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>BTC REALTIME AI ANALYZER</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+body{background:#0d1117;color:white;font-family:Arial;margin:0;padding:10px}
+h2{text-align:center;color:#FFD700}
+#chart{width:100%;height:400px}
+#rsi{width:100%;height:150px}
+.ai-box{background:#161b22;padding:20px;border-radius:10px;margin:15px 0;border:3px solid #FFD700;text-align:center}
+.ai-score{font-size:40px;font-weight:bold}
+.ai-reason{font-size:14px;color:#aaa;margin-top:10px;line-height:1.8}
+.price{font-size:28px;text-align:center;color:#00ff88;margin:10px 0}
+.update{font-size:12px;color:#888;text-align:center}
+.strong-buy{color:#00ff88}.buy{color:#88ff00}.wait{color:#ffaa00}.sell{color:#ff8800}.strong-sell{color:#ff4444}
+</style>
+</head>
+<body>
+<h2>⚡ BTC/USDT REALTIME AI ANALYZER</h2>
+<div class="price" id="price">Loading Price...</div>
+<div class="update" id="update">Last Update: -</div>
+<div id="chart"></div>
+<div id="rsi"></div>
+
+<div class="ai-box">
+  <div style="font-size:16px">AI ANALYSIS</div>
+  <div class="ai-score" id="aiScore">Loading...</div>
+  <div class="ai-reason" id="aiReason"></div>
+</div>
+
+<script>
+let allCandles = [];
+const chart=LightweightCharts.createChart(document.getElementById('chart'),{layout:{background:{color:'#0d1117'},textColor:'#DDD'},grid:{vertLines:{color:'#2B2B43'},horzLines:{color:'#2B2B43'}},width:window.innerWidth-20,height:400});
+const candleSeries=chart.addCandlestickSeries();
+const ma7=chart.addLineSeries({color:'#FFD700',lineWidth:2});
+const ma25=chart.addLineSeries({color:'#2962FF',lineWidth:2});
+const rsiChart=LightweightCharts.createChart(document.getElementById('rsi'),{layout:{background:{color:'#0d1117'},textColor:'#DDD'},width:window.innerWidth-20,height:150});
+const rsiSeries=rsiChart.addLineSeries({color:'#FFD700',lineWidth:2});
+rsiChart.addLineSeries({color:'#ff4444'}).setData([{time:0,value:70},{time:9999,value:70}]);
+rsiChart.addLineSeries({color:'#00ff88'}).setData([{time:0,value:30},{time:9999,value:30}]);
+
+// AMBIL DATA 1 MENIT DARI BINANCE REALTIME
+async function fetchRealtime(){
+  try{
+    const res=await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=200');
+    const data=await res.json();
+    allCandles = data.map(d=>({time:d[0]/1000,open:+d[1],high:+d[2],low:+d[3],close:+d[4]}));
+
+    candleSeries.setData(allCandles);
+    document.getElementById('price').innerText = '$' + allCandles.at(-1).close.toLocaleString();
+    document.getElementById('update').innerText = 'Last Update: ' + new Date().toLocaleTimeString();
+
+    // HITUNG INDIKATOR
+    const ma7Data=calcMA(allCandles,7); ma7.setData(ma7Data);
+    const ma25Data=calcMA(allCandles,25); ma25.setData(ma25Data);
+    const rsiData=calcRSI(allCandles,14); rsiSeries.setData(rsiData);
+
+    aiAnalysis(allCandles.at(-1), ma7Data.at(-1), ma25Data.at(-1), rsiData.at(-1), allCandles);
+    fibo(allCandles);
+  }catch(e){console.log(e)}
+}
+
+function calcMA(c,p){let r=[];for(let i=p-1;i<c.length;i++){let s=0;for(let j=0;j<p;j++)s+=c[i-j].close;r.push({time:c[i].time,value:s/p})}return r}
+function calcRSI(c,p){let g=0,l=0,r=[];for(let i=1;i<c.length;i++){let ch=c[i].close-c[i-1].close;if(ch>0)g+=ch;else l-=ch;if(i>=p){let rs=g/p/(l/p||0.001);r.push({time:c[i].time,value:100-100/(1+rs)});let pch=c[i-p+1].close-c[i-p].close;if(pch>0)g-=pch;else l+=pch;}}return r}
+function fibo(c){const last50=c.slice(-50); const high=Math.max(...last50.map(x=>x.high)); const low=Math.min(...last50.map(x=>x.low)); const diff=high-low; const levels={'0.236':high-diff*0.236,'0.382':high-diff*0.382,'0.5':high-diff*0.5,'0.618':high-diff*0.618,'0.786':high-diff*0.786}; for(const[k,v]of Object.entries(levels)){candleSeries.createPriceLine({price:v,color:k==='0.618'?'#FFD700':'#555',lineWidth:1,lineStyle:2,title:k})}}
+
+function aiAnalysis(candle, ma7, ma25, rsi, all){
+  let score=0, reasons=[];
+  const price=candle.close;
+  if(price>ma7.value && ma7.value>ma25.value){score+=30;reasons.push("✅ UPTREND: Harga > MA7 > MA25")}
+  else if(price<ma7.value && ma7.value<ma25.value){score-=30;reasons.push("❌ DOWNTREND: Harga < MA7 < MA25")}
+  if(rsi.value<30){score+=30;reasons.push("✅ RSI "+rsi.value.toFixed(1)+" OVERSOLD")}
+  else if(rsi.value>70){score-=30;reasons.push("❌ RSI "+rsi.value.toFixed(1)+" OVERBOUGHT")}
+  const last50=all.slice(-50); const high=Math.max(...last50.map(x=>x.high)); const low=Math.min(...last50.map(x=>x.low)); const fib618=high-(high-low)*0.618;
+  if(price>=fib618*0.995 && price<=fib618*1.005){score+=20;reasons.push("✅ DI GOLDEN ZONE 0.618")}
+
+  const el=document.getElementById('aiScore');
+  let status="";
+  if(score>=40){status="🟢 STRONG BUY";el.className='ai-score strong-buy'}
+  else if(score>=15){status="🟢 BUY";el.className='ai-score buy'}
+  else if(score>=-15){status="⚪ WAIT";el.className='ai-score wait'}
+  else if(score>=-40){status="🔴 SELL";el.className='ai-score sell'}
+  else{status="🔴 STRONG SELL";el.className='ai-score strong-sell'}
+  el.innerText=`${status} | ${score}`;
+  document.getElementById('aiReason').innerHTML=reasons.join('<br>');
+}
+
+// UPDATE TIAP 5 DETIK
+fetchRealtime();
+setInterval(fetchRealtime,5000);
+</script>
+</body>
+</html>
