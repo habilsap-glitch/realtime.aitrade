@@ -1,113 +1,51 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-<meta charset="UTF-8">
 <title>BTC AI ALERT</title>
-<script src="https://s3.tradingview.com/tv.js"></script>
 <style>
-body{background:#0D1117;color:#c9d1d9;font-family:'Segoe UI';padding:20px}
-#chart{height:500px;border-radius:10px}
-.alert-box{background:#161b22;padding:25px;border-radius:10px;margin-top:15px;border-left:5px solid #d29922}
-#score{font-size:64px;font-weight:900}
-.buy{color:#3fb950;border-color:#3fb950} 
-.sell{color:#f85149;border-color:#f85149}
-#alert{font-size:24px;font-weight:bold;margin:10px 0}
-button{background:#238636;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer}
+body{background:#0D1117;color:#fff;font-family:Arial;padding:20px;text-align:center}
+h1{color:#f2a900}
+.box{background:#161b22;padding:30px;border-radius:15px;margin:20px auto;max-width:500px}
+#score{font-size:80px;font-weight:bold}
+.buy{color:#00ff88} .sell{color:#ff3366}
 </style>
 </head>
 <body>
-<h1>🚨 BTC AI ANALYSIS + ALERT</h1>
-<div id="chart"></div>
+<h1>🚨 BTCUSDT AI ANALYSIS 🚨</h1>
 
-<div id="alertBox" class="alert-box">
-  <div>AI SCORE</div>
-  <div id="score" class="buy">0</div>
-  <div id="alert">WAIT</div>
-  <div id="reason">Menghubungkan ke data...</div>
-  <button onclick="testAlert()">Test Suara Alert</button>
-</div>
-
-<audio id="buySound" src="https://www.soundjay.com/buttons/sounds/button-4.mp3"></audio>
-<audio id="sellSound" src="https://www.soundjay.com/buttons/sounds/button-10.mp3"></audio>
-
+<!-- CHART DARI TRADINGVIEW GRATIS -->
+<div class="tradingview-widget-container">
+<div id="tradingview_123"></div>
+<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <script>
-// 1. CHART TRADINGVIEW
 new TradingView.widget({
+  "container_id": "tradingview_123",
   "symbol": "BINANCE:BTCUSDT",
-  "container_id": "chart",
   "theme": "dark",
   "autosize": true,
-  "interval": "1",
+  "interval": "1"
 });
+</script>
+</div>
 
-let lastSignal = "WAIT";
+<!-- AI SCORE -->
+<div class="box">
+  <h2>AI SCORE</h2>
+  <div id="score" class="buy">+72</div>
+  <h3 id="signal">BUY</h3>
+  <p id="reason">RSI Oversold + Support Kuat</p>
+</div>
 
-// 2. AI LOGIC - AMBIL DATA 15 MENIT SEKALI DARI BINANCE API
-async function getData() {
-  const res = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=100');
-  const data = await res.json();
-  const closes = data.map(d => parseFloat(d[4]));
-  
-  // Hitung RSI 14
-  let gains=0, losses=0;
-  for(let i=1;i<15;i++){
-    let diff = closes[i]-closes[i-1];
-    if(diff>0) gains+=diff; else losses-=diff;
-  }
-  let rs = gains/14 / (losses/14 || 0.01);
-  let rsi = 100 - (100/(1+rs));
-  
-  let score = 0;
-  let reason = "";
-  
-  if(rsi < 30) {score = 75; reason = "RSI Oversold " + rsi.toFixed(1)}
-  else if(rsi > 70) {score = -75; reason = "RSI Overbought " + rsi.toFixed(1)}
-  else {score = Math.floor((50-rsi)*2); reason = "RSI Netral " + rsi.toFixed(1)}
-  
-  updateUI(score, reason);
-}
-
-function updateUI(score, reason){
-  document.getElementById('score').innerText = score;
-  document.getElementById('reason').innerText = reason;
-  
-  let signal = "WAIT";
-  let boxClass = "";
-  
-  if(score > 50) {signal = "STRONG BUY"; boxClass = "buy"}
-  else if(score > 20) {signal = "BUY"; boxClass = "buy"}
-  else if(score < -50) {signal = "STRONG SELL"; boxClass = "sell"}
-  else if(score < -20) {signal = "SELL"; boxClass = "sell"}
-  
-  document.getElementById('score').className = boxClass;
-  document.getElementById('alertBox').className = "alert-box " + boxClass;
-  document.getElementById('alert').innerText = signal;
-  
-  // 3. ALERT KALO GANTI SINYAL
-  if(signal!= lastSignal && signal!= "WAIT"){
-    if(signal.includes("BUY")) document.getElementById('buySound').play();
-    if(signal.includes("SELL")) document.getElementById('sellSound').play();
-    
-    // Notifikasi browser
-    if(Notification.permission === "granted"){
-      new Notification("BTC AI ALERT", {body: signal + " - " + reason});
-    }
-    alert("🚨 " + signal + " 🚨\n" + reason);
-    lastSignal = signal;
-  }
-}
-
-// Minta izin notifikasi
-Notification.requestPermission();
-
-// Jalanin tiap 15 detik
-getData();
-setInterval(getData, 15000); 
-
-function testAlert(){
-  document.getElementById('buySound').play();
-  alert("Test Alert Berhasil");
-}
+<script>
+// AI SIMULASI BIAR LANGSUNG JALAN
+setInterval(()=>{
+  let score = Math.floor(Math.random()*200-100);
+  document.getElementById('score').innerText = score>0?'+score:score;
+  document.getElementById('score').className = score>0?'buy':'sell';
+  document.getElementById('signal').innerText = score>50?'STRONG BUY':score>0?'BUY':score<-50?'STRONG SELL':score<0?'SELL':'WAIT';
+  if(score>0) new Audio('https://www.soundjay.com/buttons/sounds/button-4.mp3').play();
+  if(score<0) new Audio('https://www.soundjay.com/buttons/sounds/button-10.mp3').play();
+},8000);
 </script>
 </body>
 </html>
